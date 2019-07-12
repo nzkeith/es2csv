@@ -124,7 +124,14 @@ class Es2csv:
             print('Sorting by: {}.'.format(', '.join(self.opts.sort)))
 
         res = self.es_conn.search(**search_args)
-        self.num_results = res['hits']['total']
+
+        hits_total = res['hits']['total']
+        if type(hits_total) == dict:
+            # The relation should always be 'eq' because track_total_hits can't be disabled in a scroll context
+            assert hits_total['relation'] == 'eq', "Unexpected relation '{}' in hits.total".format(hits_total['relation'])
+            self.num_results = hits_total['value']
+        else:
+            self.num_results = hits_total
 
         print('Found {} results.'.format(self.num_results))
         if self.opts.debug_mode:
