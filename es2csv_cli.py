@@ -43,7 +43,7 @@ def main():
     p.add_argument('--debug', dest='debug_mode', action='store_true', help='Debug mode on.')
 
     if len(sys.argv) == 1:
-        p.print_help()
+        p.print_help(sys.stderr)
         exit()
 
     opts = p.parse_args()

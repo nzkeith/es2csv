@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import json
 import codecs
@@ -14,6 +15,8 @@ TIMES_TO_TRY = 3
 RETRY_DELAY = 60
 META_FIELDS = [u'_id', u'_index', u'_score', u'_type']
 
+def log(message):
+    print >> sys.stderr, message
 
 # Retry decorator for functions with exceptions
 def retry(ExceptionToCheck, tries=TIMES_TO_TRY, delay=RETRY_DELAY):
@@ -25,16 +28,16 @@ def retry(ExceptionToCheck, tries=TIMES_TO_TRY, delay=RETRY_DELAY):
                 try:
                     return f(*args, **kwargs)
                 except ExceptionToCheck as e:
-                    print(e)
-                    print('Retrying in {} seconds ...'.format(delay))
+                    log(e)
+                    log('Retrying in {} seconds ...'.format(delay))
                     time.sleep(delay)
                     mtries -= 1
                 else:
-                    print('Done.')
+                    log('Done.')
             try:
                 return f(*args, **kwargs)
             except ExceptionToCheck as e:
-                print('Fatal Error: {}'.format(e))
+                log('Fatal Error: {}'.format(e))
                 exit(1)
 
         return f_retry
@@ -70,7 +73,7 @@ class Es2csv:
         else:
             indexes = [index for index in indexes if self.es_conn.indices.exists(index)]
             if not indexes:
-                print('Any of index(es) {} does not exist in {}.'.format(', '.join(self.opts.index_prefixes), self.opts.url))
+                log('Any of index(es) {} does not exist in {}.'.format(', '.join(self.opts.index_prefixes), self.opts.url))
                 exit(1)
         self.opts.index_prefixes = indexes
 
@@ -97,13 +100,13 @@ class Es2csv:
                 with codecs.open(query_file, mode='r', encoding='utf-8') as f:
                     self.opts.query = f.read()
             else:
-                print('No such file: {}.'.format(query_file))
+                log('No such file: {}.'.format(query_file))
                 exit(1)
         if self.opts.raw_query:
             try:
                 query = json.loads(self.opts.query)
             except ValueError as e:
-                print('Invalid JSON syntax in query. {}'.format(e))
+                log('Invalid JSON syntax in query. {}'.format(e))
                 exit(1)
             search_args['body'] = query
         else:
@@ -116,12 +119,12 @@ class Es2csv:
             self.csv_headers.extend([unicode(field, "utf-8") for field in self.opts.fields if '*' not in field])
 
         if self.opts.debug_mode:
-            print('Using these indices: {}.'.format(', '.join(self.opts.index_prefixes)))
-            print('Query[{0[0]}]: {0[1]}.'.format(
+            log('Using these indices: {}.'.format(', '.join(self.opts.index_prefixes)))
+            log('Query[{0[0]}]: {0[1]}.'.format(
                 ('Query DSL', json.dumps(query, ensure_ascii=False).encode('utf8')) if self.opts.raw_query else ('Lucene', query))
             )
-            print('Output field(s): {}.'.format(', '.join(self.opts.fields)))
-            print('Sorting by: {}.'.format(', '.join(self.opts.sort)))
+            log('Output field(s): {}.'.format(', '.join(self.opts.fields)))
+            log('Sorting by: {}.'.format(', '.join(self.opts.sort)))
 
         res = self.es_conn.search(**search_args)
 
@@ -133,9 +136,9 @@ class Es2csv:
         else:
             self.num_results = hits_total
 
-        print('Found {} results.'.format(self.num_results))
+        log('Found {} results.'.format(self.num_results))
         if self.opts.debug_mode:
-            print(json.dumps(res, ensure_ascii=False).encode('utf8'))
+            log(json.dumps(res, ensure_ascii=False).encode('utf8'))
 
         if self.num_results > 0:
             codecs.open(self.opts.output_file, mode='w', encoding='utf-8').close()
@@ -159,7 +162,7 @@ class Es2csv:
                     self.scroll_ids.append(res['_scroll_id'])
 
                 if not res['hits']['hits']:
-                    print('Scroll[{}] expired(multiple reads?). Saving loaded data.'.format(res['_scroll_id']))
+                    log('Scroll[{}] expired(multiple reads?). Saving loaded data.'.format(res['_scroll_id']))
                     break
                 for hit in res['hits']['hits']:
                     total_lines += 1
@@ -171,7 +174,7 @@ class Es2csv:
                     if self.opts.max_results:
                         if total_lines == self.opts.max_results:
                             self.flush_to_file(hit_list)
-                            print('Hit max result limit: {} records'.format(self.opts.max_results))
+                            log('Hit max result limit: {} records'.format(self.opts.max_results))
                             return
                 res = next_scroll(res['_scroll_id'])
             self.flush_to_file(hit_list)
@@ -236,7 +239,7 @@ class Es2csv:
                 output_file.close()
                 bar.finish()
             else:
-                print('There is no docs with selected field(s): {}.'.format(','.join(self.opts.fields)))
+                log('There is no docs with selected field(s): {}.'.format(','.join(self.opts.fields)))
             os.remove(self.tmp_file)
 
     def clean_scroll_ids(self):
